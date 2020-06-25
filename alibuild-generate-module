@@ -1,0 +1,21 @@
+#/bin/sh -ex
+
+cat << EOF
+#%Module1.0
+proc ModulesHelp { } {
+  global version
+  puts stderr "ALICE Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@@"
+}
+set version $PKGVERSION-@@PKGREVISION@$PKGHASH@@
+module-whatis "ALICE Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@@"
+EOF
+
+# Dependencies
+for x in `env | cut -f1 -d= | grep REVISION | sed -e 's/_REVISION//'`; do
+  REVISION_VALUE=`eval "echo \${${x}_REVISION}"`
+  VERSION_VALUE=`eval "echo \${${x}_VERSION}"`
+  ROOT_PATH_VALUE=`eval "echo \${${x}_ROOT}"`
+  for filename in find $ROOT_PATH_VALUE/etc/modulefiles -type -f -printf "%f\n"; do
+    echo ${REVISION_LABEL:-$x/$VERSION_VALUE-$REVISION_VALUE}
+  done
+done
