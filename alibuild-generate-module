@@ -1,5 +1,4 @@
 #/bin/sh -ex
-
 cat << EOF
 #%Module1.0
 proc ModulesHelp { } {
@@ -8,14 +7,21 @@ proc ModulesHelp { } {
 }
 set version $PKGVERSION-@@PKGREVISION@$PKGHASH@@
 module-whatis "ALICE Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@@"
+# Dependencies
 EOF
 
+printf "module load BASE/1.0    " 
+
 # Dependencies
-for x in `env | cut -f1 -d= | grep REVISION | sed -e 's/_REVISION//'`; do
-  REVISION_VALUE=`eval "echo \${${x}_REVISION}"`
-  VERSION_VALUE=`eval "echo \${${x}_VERSION}"`
-  ROOT_PATH_VALUE=`eval "echo \${${x}_ROOT}"`
-  for filename in find $ROOT_PATH_VALUE/etc/modulefiles -type -f -printf "%f\n"; do
-    echo ${REVISION_LABEL:-$x/$VERSION_VALUE-$REVISION_VALUE}
-  done
+for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -v ALIBUILD_RECIPE_TOOLS | grep REVISION | sed -e 's/_REVISION//'`; do
+  REVISION_VALUE=`eval "echo $(echo \\$$(echo ${x}_REVISION))"`
+  VERSION_VALUE=`eval "echo $(echo \\$$(echo ${x}_VERSION))"`
+  ROOT_PATH_VALUE=`eval "echo $(echo \\$$(echo ${x}_ROOT))"`
+  if [ -d $ROOT_PATH_VALUE/etc/modulefiles ]; then
+    for filename in `find $ROOT_PATH_VALUE/etc/modulefiles -type f ! -name '*.*' | xargs -n1 basename`; do
+      printf " \\"
+      printf "\n            ${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE}"
+    done
+  fi
 done
+echo
