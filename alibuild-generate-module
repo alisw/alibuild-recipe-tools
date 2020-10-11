@@ -1,4 +1,16 @@
 #/bin/sh -ex
+
+# --bin will add $INSTALLROOT/bin to PATH
+# --lib will add $INSTALLROOT/lib to LD_LIBRARY_PATH
+HAS_BIN=
+HAS_LIB=
+while [ "X$#" != "X0" ]; do
+  case $1 in
+    --bin) HAS_BIN=true; shift ;;
+    --lib) HAS_LIB=true; shift ;;
+  esac
+done
+
 cat << EOF
 #%Module1.0
 proc ModulesHelp { } {
@@ -9,8 +21,7 @@ set version $PKGVERSION-@@PKGREVISION@$PKGHASH@@
 module-whatis "ALICE Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@@"
 # Dependencies
 EOF
-
-printf "module load BASE/1.0    " 
+printf "if ![ is-loaded 'BASE/1.0' ] {\n module load BASE/1.0\n}"
 
 # Dependencies
 for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -v ALIBUILD_RECIPE_TOOLS | grep REVISION | sed -e 's/_REVISION//'`; do
@@ -21,9 +32,18 @@ for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -
     echo $x is a build_requires. Skipping loading the associated module. >&2
   elif [ -d $ROOT_PATH_VALUE/etc/modulefiles ]; then
     for filename in `find $ROOT_PATH_VALUE/etc/modulefiles -type f ! -name '*.*' | xargs -n1 basename`; do
-      printf " \\"
-      printf "\n            ${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE}"
+      printf "\nif ![ is-loaded '${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE}' ] { module load ${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE} }"
     done
   fi
 done
+case $HAS_BIN-$HAS_LIB in
+  -) ;;
+  *) printf "\n\nset PKG_ROOT \$::env(BASEDIR)/$PKGNAME/\$version\n" ;;
+esac
+if [ X$HAS_BIN = Xtrue ]; then 
+  printf "prepend-path PATH \$PKG_ROOT/bin\n"
+fi
+if [ X$HAS_LIB = Xtrue ]; then
+  printf "prepend-path LD_LIBRARY_PATH \$PKG_ROOT/lib\n"
+fi
 echo
