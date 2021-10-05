@@ -1,13 +1,15 @@
-#/bin/sh -ex
+#!/bin/sh -ex
 
-# --bin will add $INSTALLROOT/bin to PATH
-# --lib will add $INSTALLROOT/lib to LD_LIBRARY_PATH
-HAS_BIN=
-HAS_LIB=
+HAS_BIN=      # --bin will add $INSTALLROOT/bin to PATH
+HAS_LIB=      # --lib will add $INSTALLROOT/lib to LD_LIBRARY_PATH
+HAS_ROOTENV=  # --root-env will expose a ${PKGNAME^^}_ROOT environment variable
+HAS_EXTRA=    # --extra will append contents from stdin
 while [ "X$#" != "X0" ]; do
   case $1 in
     --bin) HAS_BIN=true; shift ;;
     --lib) HAS_LIB=true; shift ;;
+    --root-env) HAS_ROOTENV=true; shift ;;
+    --extra) HAS_EXTRA=true; shift ;;
   esac
 done
 
@@ -37,10 +39,13 @@ for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -
     done
   fi
 done
-case $HAS_BIN-$HAS_LIB in
-  -) ;;
+case $HAS_BIN-$HAS_LIB-$HAS_ROOTENV in
+  --) ;;
   *) printf "\n\nset PKG_ROOT \$::env(BASEDIR)/$PKGNAME/\$version\n" ;;
 esac
+if [ X$HAS_ROOTENV = Xtrue ]; then
+  printf 'setenv %s_ROOT $PKG_ROOT\n' "$(echo "$PKGNAME" | tr '[:lower:]' '[:upper:]')"
+fi
 if [ X$HAS_BIN = Xtrue ]; then 
   printf "prepend-path PATH \$PKG_ROOT/bin\n"
 fi
@@ -48,3 +53,6 @@ if [ X$HAS_LIB = Xtrue ]; then
   printf "prepend-path LD_LIBRARY_PATH \$PKG_ROOT/lib\n"
 fi
 echo
+if [ X$HAS_EXTRA = Xtrue ]; then
+  cat
+fi
