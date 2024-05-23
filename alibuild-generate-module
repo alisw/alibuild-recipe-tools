@@ -2,12 +2,15 @@
 
 # --bin will add $INSTALLROOT/bin to PATH
 # --lib will add $INSTALLROOT/lib to LD_LIBRARY_PATH
+# --cmake will add $INSTALLROOT to CMAKE_PREFIX_PATH
 HAS_BIN=
 HAS_LIB=
+HAS_CMAKE=
 while [ "X$#" != "X0" ]; do
   case $1 in
     --bin) HAS_BIN=true; shift ;;
     --lib) HAS_LIB=true; shift ;;
+    --cmake) HAS_CMAKE=true; shift ;;
   esac
 done
 
@@ -22,7 +25,9 @@ module-whatis "ALICE Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@
 # Dependencies
 EOF
 printf "if ![ is-loaded 'BASE/1.0' ] {\n module load BASE/1.0\n}"
+echo BUILD_REQUIRES=$BUILD_REQUIRES >&2
 FULL_BUILD_REQUIRES=${FULL_BUILD_REQUIRES:-$BUILD_REQUIRES}
+echo FULL_BUILD_REQUIRES=$FULL_BUILD_REQUIRES >&2
 
 # Dependencies
 for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -v ALIBUILD_RECIPE_TOOLS | grep REVISION | sed -e 's/_REVISION//'`; do
@@ -37,7 +42,7 @@ for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -
     done
   fi
 done
-case $HAS_BIN-$HAS_LIB in
+case $HAS_BIN-$HAS_LIB-$HAS_CMAKE in
   -) ;;
   *) printf "\n\nset PKG_ROOT \$::env(BASEDIR)/$PKGNAME/\$version\n" ;;
 esac
@@ -46,5 +51,8 @@ if [ X$HAS_BIN = Xtrue ]; then
 fi
 if [ X$HAS_LIB = Xtrue ]; then
   printf "prepend-path LD_LIBRARY_PATH \$PKG_ROOT/lib\n"
+fi
+if [ X$HAS_CMAKE = Xtrue ]; then
+  printf "prepend-path CMAKE_PREFIX_PATH \$PKG_ROOT\n"
 fi
 echo
