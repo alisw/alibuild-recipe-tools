@@ -3,14 +3,17 @@
 # --bin will add $INSTALLROOT/bin to PATH
 # --lib will add $INSTALLROOT/lib to LD_LIBRARY_PATH
 # --cmake will add $INSTALLROOT to CMAKE_PREFIX_PATH
+# --root will add $INSTALLROOT/include to the ROOT_INCLUDE_PATH
 HAS_BIN=
 HAS_LIB=
 HAS_CMAKE=
+HAS_ROOT=
 while [ "X$#" != "X0" ]; do
   case $1 in
     --bin) HAS_BIN=true; shift ;;
     --lib) HAS_LIB=true; shift ;;
     --cmake) HAS_CMAKE=true; shift ;;
+    --root) HAS_ROOT=true; shift ;;
   esac
 done
 
@@ -42,8 +45,8 @@ for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -
     done
   fi
 done
-case $HAS_BIN-$HAS_LIB-$HAS_CMAKE in
-  --) ;;
+case $HAS_BIN-$HAS_LIB-$HAS_CMAKE-$HAS_ROOT in
+  ---) ;;
   *) printf "\n\nset PKG_ROOT \$::env(BASEDIR)/$PKGNAME/\$version\n" ;;
 esac
 if [ X$HAS_BIN = Xtrue ]; then 
@@ -54,5 +57,8 @@ if [ X$HAS_LIB = Xtrue ]; then
 fi
 if [ X$HAS_CMAKE = Xtrue ]; then
   printf "prepend-path CMAKE_PREFIX_PATH \$PKG_ROOT\n"
+fi
+if [ X$HAS_ROOT = Xtrue ]; then
+  printf "prepend-path ROOT_INCLUDE_PATH \$PKG_ROOT/include\n"
 fi
 echo
