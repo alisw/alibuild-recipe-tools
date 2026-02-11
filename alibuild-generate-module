@@ -38,13 +38,24 @@ for x in `env | cut -f1 -d= | grep -v "^DEFAULT_" | grep -v PKGREVISION | grep -
   REVISION_VALUE=`eval "echo $(echo \\$$(echo ${x}_REVISION))"`
   VERSION_VALUE=`eval "echo $(echo \\$$(echo ${x}_VERSION))"`
   ROOT_PATH_VALUE=`eval "echo $(echo \\$$(echo ${x}_ROOT))"`
+
+  if [[ -z "$REVISION_VALUE" ]]; then
+    echo $x is taken from the system. Skipping loading the associated module. >&2
+    continue
+  fi
+
   if echo $FULL_BUILD_REQUIRES | tr [:lower:] [:upper:] | tr - _ | tr \  \\n | grep -q "^$x$"; then
     echo $x is a build_requires. Skipping loading the associated module. >&2
-  elif [ -d $ROOT_PATH_VALUE/etc/modulefiles ]; then
-    for filename in `find $ROOT_PATH_VALUE/etc/modulefiles -type f ! -name '*.*' | xargs -n1 basename`; do
-      printf "\nif ![ is-loaded \"${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE}\" ] { module load ${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE} }"
-    done
+    continue
   fi
+
+  if [ ! -d "$ROOT_PATH_VALUE/etc/modulefiles" ]; then
+    continue
+  fi
+
+  for filename in `find "$ROOT_PATH_VALUE/etc/modulefiles" -type f ! -name '*.*' | xargs -n1 basename`; do
+    printf "\nif ![ is-loaded \"${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE}\" ] { module load ${REVISION_LABEL:-$filename/$VERSION_VALUE-$REVISION_VALUE} }"
+  done
 done
 case $HAS_BIN-$HAS_LIB-$HAS_CMAKE-$HAS_ROOT in
   ---) ;;
