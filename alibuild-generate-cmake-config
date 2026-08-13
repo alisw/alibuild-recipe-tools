@@ -1,0 +1,108 @@
+#!/bin/sh -e
+
+# Write a CMake package config for a package that does not ship one, so that
+# config-mode find_package(<name>) resolves to *our* build rather than walking on
+# to a system one. Autotools packages are the usual case: without a config, a
+# consumer doing find_package(FOO) in config mode never sees us, and picks up
+# whatever the distribution installed -- which may be a different version, or
+# broken (EL10's zlib-ng-compat-devel ships a config referencing a libz.a that
+# lives in a separate repo).
+#
+#   alibuild-generate-cmake-config --name ZLIB --lib z
+#
+# writes $INSTALLROOT/lib/cmake/ZLIB/ZLIBConfig.cmake and ZLIBConfigVersion.cmake,
+# defining ZLIB::ZLIB plus the ZLIB_INCLUDE_DIRS / ZLIB_LIBRARIES variables the
+# FindZLIB module would have set. Repeat --lib to add more libraries; the first is
+# the one the imported target points at. --static-target names an extra imported
+# target for the static library, when one is installed -- give the exact name
+# consumers expect (zlib-ng's config, for instance, defines ZLIB::zlibstatic,
+# which is not derivable from the library's basename).
+#
+# The generated config locates itself relative to CMAKE_CURRENT_LIST_DIR, so it
+# keeps working after aliBuild relocates the package.
+
+NAME=
+TARGET=
+OUTDIR=
+LIBS=
+STATIC_TARGET=
+VERSION=
+
+while [ "X$#" != "X0" ]; do
+  case $1 in
+    --name) NAME=$2; shift 2 ;;
+    --target) TARGET=$2; shift 2 ;;
+    --lib) LIBS="$LIBS $2"; shift 2 ;;
+    --static-target) STATIC_TARGET=$2; shift 2 ;;
+    --version) VERSION=$2; shift 2 ;;
+    --output-dir) OUTDIR=$2; shift 2 ;;
+    *) echo "$0: unknown option: $1" >&2; exit 1 ;;
+  esac
+done
+
+NAME=${NAME:-$PKGNAME}
+[ -n "$NAME" ] || { echo "$0: --name is required (or set PKGNAME)" >&2; exit 1; }
+[ -n "$LIBS" ] || { echo "$0: at least one --lib is required" >&2; exit 1; }
+
+TARGET=${TARGET:-$NAME::$NAME}
+OUTDIR=${OUTDIR:-$INSTALLROOT/lib/cmake/$NAME}
+# Strip a leading "v": CMake compares versions numerically, so v1.3.1 would not
+# satisfy a find_package(ZLIB 1.2) request.
+VERSION=${VERSION:-${PKGVERSION#v}}
+
+case ${ARCHITECTURE:-$(uname -s)} in
+  osx*|Darwin) SHEXT=dylib ;;
+  *)           SHEXT=so ;;
+esac
+
+FIRST_LIB=
+LIBLIST=
+for lib in $LIBS; do
+  [ -n "$FIRST_LIB" ] || FIRST_LIB=$lib
+  LIBLIST="$LIBLIST \${_${NAME}_prefix}/lib/lib$lib.$SHEXT"
+done
+
+mkdir -p "$OUTDIR"
+
+{
+  cat <<EOF
+get_filename_component(_${NAME}_prefix "\${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(${NAME}_INCLUDE_DIR "\${_${NAME}_prefix}/include")
+set(${NAME}_INCLUDE_DIRS "\${${NAME}_INCLUDE_DIR}")
+set(${NAME}_LIBRARY "\${_${NAME}_prefix}/lib/lib$FIRST_LIB.$SHEXT")
+set(${NAME}_LIBRARIES "${LIBLIST# }")
+set(${NAME}_VERSION "$VERSION")
+set(${NAME}_VERSION_STRING "$VERSION")
+set(${NAME}_FOUND TRUE)
+if(NOT TARGET $TARGET)
+  add_library($TARGET UNKNOWN IMPORTED)
+  set_target_properties($TARGET PROPERTIES
+    IMPORTED_LOCATION "\${${NAME}_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "\${${NAME}_INCLUDE_DIR}")
+endif()
+EOF
+  if [ -n "$STATIC_TARGET" ]; then
+    cat <<EOF
+if(NOT TARGET $STATIC_TARGET AND EXISTS "\${_${NAME}_prefix}/lib/lib$FIRST_LIB.a")
+  add_library($STATIC_TARGET UNKNOWN IMPORTED)
+  set_target_properties($STATIC_TARGET PROPERTIES
+    IMPORTED_LOCATION "\${_${NAME}_prefix}/lib/lib$FIRST_LIB.a"
+    INTERFACE_INCLUDE_DIRECTORIES "\${${NAME}_INCLUDE_DIR}")
+endif()
+EOF
+  fi
+} > "$OUTDIR/${NAME}Config.cmake"
+
+cat > "$OUTDIR/${NAME}ConfigVersion.cmake" <<EOF
+set(PACKAGE_VERSION "$VERSION")
+if(PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
+  set(PACKAGE_VERSION_COMPATIBLE FALSE)
+else()
+  set(PACKAGE_VERSION_COMPATIBLE TRUE)
+  if(PACKAGE_VERSION VERSION_EQUAL PACKAGE_FIND_VERSION)
+    set(PACKAGE_VERSION_EXACT TRUE)
+  endif()
+endif()
+EOF
+
+echo "$0: wrote $OUTDIR/${NAME}Config.cmake" >&2
